@@ -9,33 +9,13 @@
   var state = { data: null, idx: 0, answers: {}, running: false, saveTimer: null, result: null, filter: "all" };
   var lastSave = 0;
 
-  // ------------------------------------------------------------ 主题（与作答缓存隔离）
-  var THEME_KEY = "exam-ui:theme";
-
-  function ensureTheme() {
-    if (document.documentElement.dataset.theme) return;
-    var t = null;
-    try { t = localStorage.getItem(THEME_KEY); } catch (e) {}
-    if (!t && window.matchMedia) {
-      t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    document.documentElement.dataset.theme = t || "light";
+  // ------------------------------------------------------------ 外观
+  // 明暗切换按钮已移入调色盘，主题（含 data-theme）完全由 theme.js 管理，这里只留配色入口。
+  // 顶栏 / 抽屉 / 结果页共用；圆点用 var(--blue)，自动跟随当前主色。
+  function paletteBtnHtml() {
+    return '<button class="btn ghost theme-btn" data-palette-toggle title="主题配色：自定义主题色">' +
+      '<i class="kw-dot"></i>配色</button>';
   }
-  function getTheme() { return document.documentElement.dataset.theme === "dark" ? "dark" : "light"; }
-  function themeBtnHtml() {
-    return '<button class="btn ghost theme-btn" data-theme-toggle title="切换深色 / 浅色主题">' +
-      (getTheme() === "dark" ? "浅色" : "深色") + "</button>";
-  }
-  function toggleTheme() {
-    var next = getTheme() === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
-    var label = next === "dark" ? "浅色" : "深色";
-    [].forEach.call(document.querySelectorAll("[data-theme-toggle]"), function (b) {
-      b.textContent = label;
-    });
-  }
-  ensureTheme();
 
   // ------------------------------------------------------------ 窄屏抽屉（纯布局，不碰作答逻辑）
   // 宽度不足，或宽高比过大且屏幕过矮（横屏手机）时启用紧凑布局
@@ -68,7 +48,7 @@
   function drawerHeadHtml(titleText) {
     return '<div class="drawer-head">' +
       '<div class="drawer-title">' + esc(titleText) + "</div>" +
-      '<div class="drawer-tools">' + themeBtnHtml() +
+      '<div class="drawer-tools">' + paletteBtnHtml() +
         '<button class="drawer-close" data-drawer-close>收起</button>' +
       "</div>" +
     "</div>";
@@ -198,7 +178,7 @@
           '<span class="timer' + (state.data.timed ? "" : " plain") + '" id="timer">' +
             (state.data.timed ? fmtClock(state.data.remaining) : "不限时") + "</span>" +
           '<button class="btn primary" id="submitBtn">交卷</button>' +
-          themeBtnHtml() +
+          paletteBtnHtml() +
           drawerBtnHtml() +
         "</div>" +
       "</header>" +
@@ -495,7 +475,7 @@
         '<div class="brand"><span class="mark">绩</span><span class="ttl">' + esc(r.title) + "</span></div>" +
         '<div class="tools">' +
           '<span class="progress">用时 ' + fmtDuration(r.duration_seconds) + "</span>" +
-          themeBtnHtml() +
+          paletteBtnHtml() +
           drawerBtnHtml() +
         "</div>" +
       "</header>" +
@@ -721,7 +701,6 @@
   // 全部用事件委托：顶栏/抽屉重建后仍有效（只做 UI 开关，不触碰作答逻辑）
   document.addEventListener("click", function (e) {
     if (!e.target.closest) return;
-    if (e.target.closest("[data-theme-toggle]")) { toggleTheme(); return; }
     if (e.target.closest("[data-drawer-toggle]")) {
       setDrawer(!document.documentElement.classList.contains("drawer-open"));
       return;

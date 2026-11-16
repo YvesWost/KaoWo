@@ -73,6 +73,40 @@ export_result(session_id)           # 导出 xlsx
 
 答案实时保存（防抖 700ms，不会做立即保存），服务端 + localStorage 双备份，刷新可继续。
 
+## 主题配色
+
+顶栏（手机端在题号抽屉顶部）点「配色」打开调色盘。**高度自定义**：轮廓、背景、字体三处可分别指定不同颜色，
+主题色还会按「染色强度」大量铺到背景上，不只是改选中框那点轮廓。选择存浏览器 localStorage
+（`exam-ui:palette` 存全部自定义、`exam-ui:theme` 存明暗），纯本地、按浏览器隔离，刷新保留。
+
+调色盘分三块，每块都有取色器 + hex 输入 + 「应用」+ `↺` 清除：
+
+- **主题色 · 轮廓 / 选中框 / 按钮**：12 个预设色 + 自定义取色。决定 `--blue` 主色系（选中框、按钮、
+  得分环、当前题描边）与边框线 `--line*`。保持色相 / 饱和度，只沿明度方向调整，直到主色与卡片背景达到
+  `theme.json` 的 `contrast`（默认 4.5:1，WCAG AA 正文）；浅色压暗、暗色提亮，再由主色派生
+  `--blue-dark` / `--blue-soft` / `--blue-grad` / `--blue-hover` / `--blue-cell-border`、聚焦光环、
+  答题卡图例等整套色阶。
+- **背景 · 主题色大量应用**：`染色强度` 滑块（0–100%，默认取 `theme.json` 的 `strength`=0.38）控制主题色
+  铺到 `--bg` / `--surface` / `--surface-2/3` / `--hover-bg` 和边框的比例，越大背景越「有色」；
+  也可「单独指定」一个背景色直接覆盖。**强度拉到 0** 即让背景与边框回到中性。
+- **字体色**：可单独指定 `--ink*`；不指定时，若新背景让默认文字对比不足，会按最小对比度自动取纯黑或纯白。
+  面板实时显示「字体 vs 卡片」对比度是否达标，并有「按最小对比度自动修正字体」一键修正。
+
+规则与边界：
+
+- **功能色不变**：红 / 黄 / 绿对错色、`--on-color` / `--on-amber` 始终不动。
+- **默认零改动**：没自定义任何颜色时不写内联变量，页面与原来的明暗主题像素级一致。
+- **复原**：只想褪掉背景染色 → 强度拉到 0；要连轮廓、字体一起复原 → 点「清除自定义」（`clearAll()`）。
+  面板底部「☀ 浅色 / ☾ 深色」是原明暗切换，点任一个即切基底并清除全部自定义、回到该主题干净预设；
+  用处不大所以缩成小按钮，紧挨「清除自定义」「完成」并排。
+- **明暗统一由 `theme.js` 管理**：`app.js` 只剩「配色」按钮，独立的明暗按钮与 `toggleTheme` 已移除；
+  `data-theme` 由本模块设置并监听，离线也能用。
+- **配置文件**：`static/theme.json`（独立文件，不进题库、不碰 `data/sessions/`）含
+  `defaultAccent` / `contrast` / `strength` / `presets`，可手改后刷新生效；读取失败时用 `theme.js`
+  内置的同款兜底。静态资源走 `/static/` 路由，新增文件直接丢进 `static/` 即可，无需改后端。
+
+主题色逻辑全在 `static/theme.js`（对外 `window.KaoWoTheme`），作答、判分、保存、题库读取逻辑均未改动。
+
 ## 判分规则
 
 | 题型 | 规则 |
@@ -95,9 +129,11 @@ export_result(session_id)           # 导出 xlsx
 ```
 exam-mcp/                ← 本地目录名；开源仓库名 KaoWo
 ├─ server.py            MCP 工具 + HTTP 服务 + 判分 + Excel 读写
-├─ static/exam.html     页面外壳（引入 KaTeX）
-├─ static/style.css     样式（改主题从这里下手）
+├─ static/exam.html     页面外壳（引入 KaTeX 与 theme.js）
+├─ static/style.css     样式（明暗 + 主题色变量）
 ├─ static/app.js        答题逻辑（改交互从这里下手）
+├─ static/theme.json    主题配色配置：默认色 / 预设色板 / 最小对比度 / 染色强度（可手改）
+├─ static/theme.js      主题色计算 + 调色盘（独立模块，不碰作答逻辑）
 ├─ static/katex/        本地 KaTeX：css / js / auto-render / fonts（离线，勿删）
 ├─ banks/*.xlsx|json    题库；导入生成同名 .json
 ├─ banks/_session_*.json 开考时抽题快照（可随时删，勿当题库）
@@ -132,7 +168,8 @@ cd E:/Claw/Learn/exam-mcp
 
 | 想改什么 | 改哪里 |
 |---|---|
-| 配色、间距、暗色 | `static/style.css` 顶部 CSS 变量 |
+| 明暗配色、间距 | `static/style.css` 顶部 CSS 变量 |
+| 主题色板 / 最小对比度 / 染色强度 | `static/theme.json`；三槽计算、调色盘、明暗切换都在 `static/theme.js` |
 | 按钮、键盘、跳题逻辑 | `static/app.js` 的 `renderQuestion` / `onPanelClick` / `toggleUnknown` |
 | 判分规则、部分分 | `server.py` 的 `grade_item` |
 | 新增题型 | `server.py` 的 `TYPE_LABEL`、`grade_item`、`_guess_type`；`app.js` 的 `renderQuestion` |

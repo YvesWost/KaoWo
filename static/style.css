@@ -5,6 +5,7 @@
   --blue-grad: #4f9bff;
   --blue-hover: #14559f;
   --blue-cell-border: #b8d2f5;
+  --blue-ring: rgba(26, 111, 212, .12);
   --ink: #1f2329;
   --ink-2: #4e5969;
   --ink-3: #86909c;
@@ -50,6 +51,7 @@
   --blue-grad: #3f7fd6;
   --blue-hover: #3a7bd0;
   --blue-cell-border: #2c4c78;
+  --blue-ring: rgba(26, 111, 212, .12);
   --ink: #e6e9ef;
   --ink-2: #b3bcc9;
   --ink-3: #8b95a5;
@@ -275,7 +277,7 @@ button { font: inherit; cursor: pointer; }
   outline: none; transition: border-color .15s, box-shadow .15s;
   resize: vertical;
 }
-.field:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(26, 111, 212, .12); }
+.field:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-ring); }
 textarea.field { min-height: 140px; line-height: 1.8; }
 
 /* ---------------- 底部操作 ---------------- */
@@ -542,7 +544,6 @@ textarea.field { min-height: 140px; line-height: 1.8; }
 .compact .progress { font-size: 12px; }
 .compact .timer { min-width: 76px; font-size: 13px; padding: 4px 8px; }
 .compact .brand .ttl { display: none; }                   /* 题库名随卡片收进抽屉 */
-.compact .topbar [data-theme-toggle] { display: none; }   /* 明暗按钮随卡片收进抽屉 */
 .compact .savestate { display: none; }
 .compact .toast { bottom: 18px; }
 
@@ -614,3 +615,97 @@ textarea.field { min-height: 140px; line-height: 1.8; }
 /* ---- LaTeX 公式（KaTeX）：跟随主题文字色，暗色下不反白 ---- */
 .katex { color: inherit; }
 .katex-display { margin: 10px 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+
+/* ================= 主题配色盘（KaoWo theme.js） ================= */
+/* 顶栏 / 抽屉按钮上的当前色圆点，用 var(--blue) 自动跟随主色 */
+.kw-dot {
+  display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--blue); margin-right: 6px; vertical-align: -1px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .1);
+}
+
+#kw-palette { position: fixed; inset: 0; z-index: 90; display: none; }
+#kw-palette.show { display: block; }
+.kw-mask { position: absolute; inset: 0; background: rgba(17, 24, 39, .45); animation: fade .15s ease; }
+.kw-panel {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 28px));
+  max-height: calc(100vh - 40px); overflow-y: auto;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .28);
+}
+.kw-head {
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 1;
+  padding: 16px 20px 12px; background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.kw-head b { font-size: 15px; }
+.kw-x { border: 0; background: transparent; color: var(--ink-3); font-size: 22px; line-height: 1; padding: 0 4px; }
+.kw-x:hover { color: var(--ink); }
+.kw-body { padding: 16px 20px 18px; }
+.kw-label { font-size: 12px; color: var(--ink-3); margin: 4px 0 10px; }
+.kw-swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 18px; }
+.kw-swatch {
+  aspect-ratio: 1 / 1; border-radius: 9px; border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .1); cursor: pointer;
+  transition: transform .12s;
+}
+.kw-swatch:hover { transform: scale(1.08); }
+.kw-swatch.on { border-color: var(--ink); }
+.kw-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+#kw-color {
+  width: 44px; height: 36px; padding: 2px; flex: none;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer;
+}
+#kw-hex {
+  flex: 1; min-width: 0; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 13px;
+}
+.kw-mini {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+  padding: 7px 12px; border-radius: 8px; font-size: 13px; white-space: nowrap;
+}
+.kw-mini:hover { border-color: var(--line-strong); color: var(--ink); }
+.kw-mini.on { background: var(--blue-soft); border-color: var(--blue-cell-border); color: var(--blue-dark); }
+.kw-mini.primary { background: var(--blue); border-color: var(--blue); color: var(--on-color); }
+.kw-modes span { font-size: 13px; color: var(--ink-2); margin-right: 4px; }
+.kw-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); margin: 2px 0 14px; cursor: pointer; }
+.kw-check input { width: 15px; height: 15px; accent-color: var(--blue); }
+.kw-contrast { font-size: 12px; line-height: 1.6; padding: 9px 12px; border-radius: 8px; background: var(--surface-2); color: var(--ink-2); margin-bottom: 12px; }
+.kw-contrast.ok b { color: var(--green); }
+.kw-contrast.bad b { color: var(--red); }
+.kw-note { font-size: 11.5px; line-height: 1.7; color: var(--ink-3); margin-bottom: 16px; }
+.kw-actions {
+  display: flex; justify-content: space-between; gap: 10px;
+  position: sticky; bottom: 0; z-index: 2;
+  padding: 12px 0 2px; margin-top: 4px;
+  background: var(--surface); border-top: 1px solid var(--line);
+}
+
+/* 电脑端顶栏已带入口；紧凑屏把入口收进抽屉 head，避免顶栏拥挤 */
+.compact .topbar [data-palette-toggle] { display: none; }
+@media (max-width: 560px) {
+  .kw-panel {
+    top: auto; bottom: 0; left: 0; transform: none;
+    width: 100%; max-height: 82vh; border-radius: 16px 16px 0 0;
+  }
+}
+
+/* ---- 高度自定义：基底按钮 / 槽位行 / 强度滑杆 / 清除 ---- */
+.kw-row { flex-wrap: wrap; }
+.kw-base { padding: 7px 10px; font-size: 12px; }
+.kw-base.on { background: var(--blue-soft); border-color: var(--blue-cell-border); color: var(--blue-dark); font-weight: 600; }
+.kw-actions { flex-wrap: wrap; }
+.kw-actions-spacer { flex: 1 1 auto; }
+.kw-slot { gap: 8px; }
+.kw-slot #kw-accent-hex, .kw-slot #kw-bg-hex, .kw-slot #kw-text-hex { flex: 1; min-width: 96px; }
+.kw-slotlabel { font-size: 12px; color: var(--ink-3); flex: none; }
+.kw-clear { padding: 7px 9px; color: var(--ink-3); }
+.kw-strength { gap: 10px; }
+.kw-strength span { font-size: 12px; color: var(--ink-3); flex: none; }
+.kw-strength b { font-size: 12px; color: var(--ink-2); min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+.kw-strength input[type="range"] { flex: 1; min-width: 80px; accent-color: var(--blue); }
+.kw-swatches { margin-bottom: 12px; }
