@@ -1,0 +1,19 @@
+# Python 运行环境与缓存
+.venv/
+__pycache__/
+*.py[cod]
+
+# 个人题库：默认全部排除，只放行两个示例题库
+# 想公开某个自己的题库时，单独去掉对应行或 git add -f
+banks/*
+!banks/示例-生理学.json
+!banks/示例-生理学.xlsx
+!banks/体验-细胞与血液.json
+!banks/体验-细胞与血液.xlsx
+
+# 作答记录 / 导出成绩 / 备份（含个人学习数据）
+data/
+
+# 开发与验证临时产物
+.e2e/
+_probe.png

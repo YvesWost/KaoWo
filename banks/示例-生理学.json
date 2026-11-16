@@ -1,0 +1,172 @@
+{
+  "id": "示例-生理学",
+  "title": "示例-生理学",
+  "source": "E:\\Claw\\Learn\\exam-mcp\\banks\\示例-生理学.xlsx",
+  "created": "2026-11-08 17:37:26",
+  "skipped": 0,
+  "questions": [
+    {
+      "id": "q1",
+      "type": "single",
+      "stem": "心肌细胞动作电位平台期形成的主要离子流是",
+      "options": [
+        {
+          "key": "A",
+          "text": "Na+内流"
+        },
+        {
+          "key": "B",
+          "text": "Ca2+内流与K+外流"
+        },
+        {
+          "key": "C",
+          "text": "K+内流"
+        },
+        {
+          "key": "D",
+          "text": "Cl-外流"
+        }
+      ],
+      "answer": [
+        "B"
+      ],
+      "explanation": "平台期由L型钙通道的Ca2+内流与IK外流共同维持，二者大致平衡。",
+      "score": 2.0
+    },
+    {
+      "id": "q2",
+      "type": "single",
+      "stem": "正常成人安静时的肾小球滤过率约为",
+      "options": [
+        {
+          "key": "A",
+          "text": "25 ml/min"
+        },
+        {
+          "key": "B",
+          "text": "75 ml/min"
+        },
+        {
+          "key": "C",
+          "text": "125 ml/min"
+        },
+        {
+          "key": "D",
+          "text": "200 ml/min"
+        }
+      ],
+      "answer": [
+        "C"
+      ],
+      "explanation": "GFR约125 ml/min，即180 L/d。",
+      "score": 2.0
+    },
+    {
+      "id": "q3",
+      "type": "multiple",
+      "stem": "影响动脉血压的因素包括",
+      "options": [
+        {
+          "key": "A",
+          "text": "每搏输出量"
+        },
+        {
+          "key": "B",
+          "text": "心率"
+        },
+        {
+          "key": "C",
+          "text": "外周阻力"
+        },
+        {
+          "key": "D",
+          "text": "大动脉弹性"
+        },
+        {
+          "key": "E",
+          "text": "循环血量"
+        }
+      ],
+      "answer": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "explanation": "五因素均影响动脉血压，其中外周阻力主要影响舒张压。",
+      "score": 4.0
+    },
+    {
+      "id": "q4",
+      "type": "judge",
+      "stem": "神经细胞静息电位主要由K+外流形成",
+      "options": [
+        {
+          "key": "对",
+          "text": "对"
+        },
+        {
+          "key": "错",
+          "text": "错"
+        }
+      ],
+      "answer": [
+        "对"
+      ],
+      "explanation": "静息时膜对K+通透性最高，K+外流达到平衡电位。",
+      "score": 1.0
+    },
+    {
+      "id": "q5",
+      "type": "fill",
+      "stem": "血浆胶体渗透压主要由______形成",
+      "options": [],
+      "answer": [
+        "白蛋白",
+        "清蛋白"
+      ],
+      "explanation": "白蛋白分子量小、含量高，占胶体渗透压的75%以上。",
+      "score": 2.0
+    },
+    {
+      "id": "q6",
+      "type": "short",
+      "stem": "简述影响肾小球滤过的因素",
+      "options": [],
+      "answer": [
+        "有效滤过压、滤过膜通透性与面积、肾血浆流量"
+      ],
+      "explanation": "从有效滤过压三要素、滤过膜、肾血浆流量三方面作答。",
+      "score": 6.0
+    },
+    {
+      "id": "q7",
+      "type": "single",
+      "stem": "下列关于激素作用方式的叙述，错误的是",
+      "options": [
+        {
+          "key": "A",
+          "text": "经血液运输"
+        },
+        {
+          "key": "B",
+          "text": "作用于靶细胞"
+        },
+        {
+          "key": "C",
+          "text": "需与受体结合"
+        },
+        {
+          "key": "D",
+          "text": "直接提供能量"
+        }
+      ],
+      "answer": [
+        "D"
+      ],
+      "explanation": "激素只起信息传递作用，不直接参与代谢供能。",
+      "score": 1.0
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>考试</title>
+<script>
+  // 提前应用主题，避免深色模式闪白；键名与作答缓存隔离
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("exam-ui:theme"); } catch (e) {}
+    if (!t) t = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+    document.documentElement.dataset.theme = t || "light";
+  })();
+</script>
+<link rel="stylesheet" href="/static/katex/katex.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <div class="loading">正在载入试卷…</div>
+</div>
+<div id="modal-root"></div>
+<div id="toast" class="toast"></div>
+<script src="/static/katex/katex.min.js"></script>
+<script src="/static/katex/auto-render.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
