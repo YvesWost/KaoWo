@@ -3,7 +3,6 @@
 > 本地题库考场：AI 通过 MCP 工具开考、等交卷、取判分，你在浏览器里像学习通一样做题。
 > 服务端零模型调用，只做抽题、判分、存档、导出。无账号、无监控、完全离线。
 
-- 开源仓库：`git@gitee.com:wangyang02468/kao-wo.git`
 - 入口：`server.py`（MCP stdio + 本地 HTTP，同一个进程）
 - 工作区配置：`E:/Claw/Learn/.mcp.json`，服务名 `exam`，工具前缀 `mcp__exam__`
 - 数据：题库 `banks/`，作答快照 `data/sessions/`，导出 `data/result_*.xlsx`
