@@ -9,7 +9,7 @@
     export_result(session_id, out_path)   导出结果表格
 
 运行：python server.py          （stdio，由 MCP 客户端拉起）
-题库放到 banks/ 下，会话数据落到 data/sessions/。
+题库放到 banks/ 下，会话数据落到 data/sessions/，用户配色落到 data/theme-user.json。
 """
 
 from __future__ import annotations
@@ -42,9 +42,14 @@ ROOT = Path(__file__).resolve().parent
 BANKS_DIR = ROOT / "banks"
 DATA_DIR = ROOT / "data" / "sessions"
 STATIC_DIR = ROOT / "static"
+# 用户配色：服务端持久化，任意 host / 端口 / 浏览器访问都读写同一份文件。
+# 与出厂默认配置 static/theme.json 分离，且落在已被 .gitignore 排除的 data/ 下。
+THEME_FILE = ROOT / "data" / "theme-user.json"
 STATIC_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
     ".woff2": "font/woff2",
     ".woff": "font/woff",
     ".ttf": "font/ttf",
@@ -451,6 +456,52 @@ def _submit(sess: dict) -> dict:
         return sess["result"]
 
 
+# ---------------------------------------------------------------- 用户配色（服务端持久化）
+
+_THEME_HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def _clean_theme_state(raw) -> dict:
+    """只保留合法字段，避免把任意 / 超大内容写进配置文件。"""
+    out: dict = {}
+    if not isinstance(raw, dict):
+        return out
+    if raw.get("base") in ("light", "dark"):
+        out["base"] = raw["base"]
+    for key in ("accent", "bg", "text"):
+        v = raw.get(key)
+        if isinstance(v, str) and _THEME_HEX.match(v.strip()):
+            out[key] = v.strip()
+    s = raw.get("strength")
+    if isinstance(s, (int, float)) and not isinstance(s, bool):
+        out["strength"] = max(0.0, min(1.0, float(s)))
+    return out
+
+
+def _theme_read() -> dict:
+    with _LOCK:
+        try:
+            data = json.loads(THEME_FILE.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError
+            return {"rev": int(data.get("rev") or 0),
+                    "state": _clean_theme_state(data.get("state"))}
+        except (OSError, ValueError, TypeError):
+            return {"rev": 0, "state": {}}
+
+
+def _theme_write(state) -> dict:
+    with _LOCK:
+        cur = _theme_read()  # RLock 可重入
+        st = _clean_theme_state(state)
+        payload = {"rev": cur["rev"] + 1, "state": st, "updated_at": _now()}
+        THEME_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = THEME_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, THEME_FILE)
+        return {"rev": payload["rev"], "state": st}
+
+
 # ---------------------------------------------------------------- HTTP 服务
 
 _httpd: ThreadingHTTPServer | None = None
@@ -573,12 +624,21 @@ class Handler(BaseHTTPRequestHandler):
                 if sess["status"] != "submitted":
                     return self._json({"error": "尚未交卷"}, 409)
                 return self._json(sess["result"])
+        if parts[0] == "api" and len(parts) == 2 and parts[1] == "theme":
+            r = _theme_read()
+            return self._json({"ok": True, "rev": r["rev"], "state": r["state"]})
         if parts[0] == "api" and len(parts) == 2 and parts[1] == "health":
             return self._json({"ok": True, "sessions": len(SESSIONS)})
         return self._json({"error": "not found", "path": self.path}, 404)
 
     def _route_post(self):
         parts = [p for p in urlparse(self.path).path.split("/") if p]
+        if len(parts) == 2 and parts[0] == "api" and parts[1] == "theme":
+            body = self._body()
+            # 接受 {state: {...}} 或直接就是 state 对象；rev 由服务端维护，忽略客户端传值
+            state = body.get("state", body) if isinstance(body, dict) else {}
+            r = _theme_write(state)
+            return self._json({"ok": True, "rev": r["rev"], "state": r["state"]})
         if parts[:2] != ["api", "session"] or len(parts) != 4:
             return self._json({"error": "not found"}, 404)
         try:

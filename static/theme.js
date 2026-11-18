@@ -1,4 +1,4 @@
-/* KaoWo 主题配色（高度自定义版）
+/* KaoWo 主题配色（高度自定义版 + 服务端持久化）
  *
  * 用户可在调色盘里分别给「轮廓(主题色) / 背景 / 字体」指定不同颜色：
  *  - 轮廓 accent：--blue 主色系（选中框、按钮、得分环、当前题…）与边框线 --line*。
@@ -6,12 +6,19 @@
  *  - 字体 text：--ink / --ink-2 / --ink-3。
  * 「默认浅色 / 默认深色」两个按钮是原明暗切换，收进面板，点击即切基底并清除全部自定义。
  *
+ * 持久化（跨浏览器 / 多端口 / 不同访问地址共享）：
+ *  - 权威源是服务端 data/theme-user.json，经相对路径 /api/theme 读写；无论用 127.0.0.1、
+ *    localhost 还是局域网 IP、无论哪个端口，都打到同一份文件。
+ *  - 启动即 GET 覆盖本地；每次改动防抖 POST 推送；定时 + 切回页面时轮询，按 rev 跟随其他端。
+ *  - localStorage 降级为「首帧防闪 + 服务端不可用时的离线缓存」，不再是权威源。
+ *  - 出厂默认（预设色 / contrast / strength）仍来自 static/theme.json，与用户选择分离。
+ *
  * 设计约束（勿破坏）：
  *  - 未启用任何自定义时，不写任何内联变量，CSS 保持 100% 原样（只是 data-theme 可能为 dark）。
  *  - 红 / 黄 / 绿 对错色及 --on-color / --on-amber 属功能色，一律不动。
  *  - 字体色未自定义时，若新背景让默认文字对比不足，自动按最小对比度取黑或白，保证可读。
  *  - 与作答缓存 exam:<sid>、题库、会话数据完全无关，不 fetch 任何考试接口。
- *  - 纯前端、离线、零外部依赖；配置来自 /static/theme.json，失败时用内置兜底。
+ *  - 零外部依赖；服务端 / 默认配置读取失败时都用内置兜底，离线也能用。
  */
 (function () {
   "use strict";
@@ -50,7 +57,11 @@
     "--line", "--line-strong", "--line-dot", "--sep", "--ring-track"
   ];
 
-  var PALETTE_KEY = "exam-ui:palette";   // 用户选择，与作答缓存 exam:<sid> 隔离
+  var API = "/api/theme";          // 相对路径：任意 host / 端口都指向同一服务端文件
+  var PUSH_DELAY = 350;            // 改动后防抖推送（ms）
+  var POLL_MS = 3000;              // 轮询间隔（跟随其他浏览器 / 标签页的改动）
+
+  var PALETTE_KEY = "exam-ui:palette";   // 首帧防闪 + 离线降级缓存，不再是权威源
   var THEME_KEY = "exam-ui:theme";       // 兼容 exam.html 头部防闪脚本与旧版
   var cfg = null;
   var state = null;
@@ -58,6 +69,10 @@
   var eff = null;        // 实际生效色 { bg, surface, ink, blue, line }
   var open = false;
   var pop = null;
+
+  var knownRev = 0;      // 已知的服务端版本
+  var dirty = false;     // 本地有尚未推送的改动（此时本地优先，不被轮询覆盖）
+  var pushTimer = null;
 
   // ---------------------------------------------------------------- 颜色工具
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
@@ -282,29 +297,40 @@
     }
     return o;
   }
-  function load() {
+  // 规范化 state（补 base / strength 默认值、过滤非法值），localStorage 与服务端共用
+  function normalizeState(raw) {
     var s = { base: null, accent: null, bg: null, text: null, strength: DEFAULTS.strength };
-    try {
-      var raw = JSON.parse(localStorage.getItem(PALETTE_KEY) || "null");
-      if (raw && typeof raw === "object") {
-        if (raw.base === "dark" || raw.base === "light") s.base = raw.base;
-        if (isHex(raw.accent)) s.accent = toHex6(raw.accent);
-        if (isHex(raw.bg)) s.bg = toHex6(raw.bg);
-        if (isHex(raw.text)) s.text = toHex6(raw.text);
-        if (typeof raw.strength === "number") s.strength = clamp(raw.strength, 0, 1);
-      }
-    } catch (e) {}
+    if (raw && typeof raw === "object") {
+      if (raw.base === "dark" || raw.base === "light") s.base = raw.base;
+      if (isHex(raw.accent)) s.accent = toHex6(raw.accent);
+      if (isHex(raw.bg)) s.bg = toHex6(raw.bg);
+      if (isHex(raw.text)) s.text = toHex6(raw.text);
+      if (typeof raw.strength === "number") s.strength = clamp(raw.strength, 0, 1);
+    }
     if (!s.base) {
       var t = null;
       try { t = localStorage.getItem(THEME_KEY); } catch (e) {}
       s.base = (t === "dark" || t === "light") ? t
         : (document.documentElement.dataset.theme === "dark" ? "dark" : "light");
     }
-    state = s;
+    return s;
   }
-  function persist() {
+  // state 指纹：键顺序固定，用于判断两端内容是否一致
+  function stateKey(s) {
+    return [s.base, s.accent || "", s.bg || "", s.text || "", Number(s.strength).toFixed(4)].join("|");
+  }
+  function load() {
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem(PALETTE_KEY) || "null"); } catch (e) {}
+    state = normalizeState(raw);   // 首帧防闪；随后 loadRemote 会用服务端值覆盖
+  }
+  function cacheLocal() {
     try { localStorage.setItem(PALETTE_KEY, JSON.stringify(state)); } catch (e) {}
     try { localStorage.setItem(THEME_KEY, state.base); } catch (e) {}
+  }
+  function persist() {
+    cacheLocal();
+    schedulePush();
   }
   function loadConfig() {
     try {
@@ -318,6 +344,82 @@
         })
         .catch(function () {});
     } catch (e) {}
+  }
+
+  // ---- 服务端权威源：启动拉取 / 改动推送 / 轮询跟随 ----
+  function schedulePush() {
+    dirty = true;
+    if (pushTimer) clearTimeout(pushTimer);
+    pushTimer = setTimeout(pushNow, PUSH_DELAY);
+  }
+  function pushNow() {
+    pushTimer = null;
+    var snap = stateKey(state);
+    try {
+      fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ state: state })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || typeof d !== "object") return;
+          if (typeof d.rev === "number") knownRev = Math.max(knownRev, d.rev);
+          if (stateKey(state) === snap) dirty = false;   // 推送期间没再改 -> 已同步
+          else schedulePush();                            // 期间又改了 -> 再推一次
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  function applyRemote(remote) {
+    state = normalizeState(remote);
+    dirty = false;
+    cacheLocal();
+    applyBase();
+    refresh();
+    // 面板打开时只同步控件，不重建 DOM，避免打断正在拖动的取色器
+    if (open && document.body) { syncInputs(); updateReadout(); }
+  }
+  function loadRemote() {
+    try {
+      fetch(API, { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || typeof d !== "object") return;      // 服务端不可用 -> 保持 localStorage 降级
+          if (typeof d.rev === "number") knownRev = d.rev;
+          var hasServer = d.state && typeof d.state === "object" && Object.keys(d.state).length > 0;
+          if (hasServer) {
+            applyRemote(d.state);                       // 服务端为准（含「清除自定义」后的干净态）
+          } else if (active()) {
+            schedulePush();                             // 首次升级：把本地已有选择迁移上服务端
+          } else {
+            applyRemote(d.state);                       // 都干净，统一基底
+          }
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  function pollOnce() {
+    try {
+      fetch(API, { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || typeof d !== "object" || typeof d.rev !== "number") return;
+          if (d.rev === knownRev) return;               // 版本没变，无事
+          var remote = normalizeState(d.state);
+          var rk = stateKey(remote);
+          if (dirty || pushTimer) return;               // 本地有未推送改动 -> 本地优先，下轮再看
+          knownRev = d.rev;
+          if (rk === stateKey(state)) return;           // 内容一致，只更新版本
+          applyRemote(remote);                         // 本地干净且远端不同 -> 跟随其他端
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  function startPolling() {
+    setInterval(pollOnce, POLL_MS);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) pollOnce(); });
+    window.addEventListener("focus", pollOnce);
   }
 
   // ---------------------------------------------------------------- 状态变更
@@ -528,16 +630,18 @@
   cfg = mergeDefaults(null);
   applyBase();     // 明暗由本模块统一设置（exam.html 头部先给了初值，这里同步，无闪）
   refresh();       // 立即按 localStorage 应用，避免闪默认色
-  loadConfig();    // 异步读取 theme.json（失败则用内置兜底）
+  loadConfig();    // 异步读取出厂默认配置 theme.json（失败则用内置兜底）
+  loadRemote();    // 异步读取服务端用户配色（权威源），覆盖本地并写入缓存
+  startPolling();  // 定时 / 切回页面时跟随其他浏览器、标签页的改动
 
   if (window.MutationObserver) {
     new MutationObserver(function (ms) {
       for (var i = 0; i < ms.length; i++) {
         if (ms[i].attributeName === "data-theme") {
           var t = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-          if (t !== state.base) { state.base = t; persist(); }
+          state.base = t;   // 明暗变更已由 setBase / applyRemote 负责推送，这里不回写，避免回环
           refresh();
-          if (open && document.body) renderPalette();
+          if (open && document.body) { syncInputs(); updateReadout(); }
           break;
         }
       }
@@ -558,6 +662,8 @@
     setText: function (h) { setSlot("text", h); },
     setStrength: setStrength,
     autoFixText: autoFixText,
-    clearAll: clearAll
+    clearAll: clearAll,
+    syncNow: pollOnce,
+    getState: function () { return JSON.parse(JSON.stringify(state)); }
   };
 })();

@@ -5,7 +5,7 @@
 
 - **入口**：`server.py`（MCP stdio + 本地 HTTP，同一个进程）
 - **工作区配置**：`E:/Claw/Learn/.mcp.json`，服务名 `exam`，工具前缀 `mcp__exam__`
-- **数据**：题库 `banks/`，作答快照 `data/sessions/`，导出 `data/result_*.xlsx`
+- **数据**：题库 `banks/`，作答快照 `data/sessions/`，导出 `data/result_*.xlsx`，用户配色 `data/theme-user.json`
 
 > 项目名已定为 **KaoWo（考我）**；本地目录仍叫 `exam-mcp`、MCP 服务名仍是 `exam`，以保持现有配置与流程完全不变。
 
@@ -76,8 +76,24 @@ export_result(session_id)           # 导出 xlsx
 ## 主题配色
 
 顶栏（手机端在题号抽屉顶部）点「配色」打开调色盘。**高度自定义**：轮廓、背景、字体三处可分别指定不同颜色，
-主题色还会按「染色强度」大量铺到背景上，不只是改选中框那点轮廓。选择存浏览器 localStorage
-（`exam-ui:palette` 存全部自定义、`exam-ui:theme` 存明暗），纯本地、按浏览器隔离，刷新保留。
+主题色还会按「染色强度」大量铺到背景上，不只是改选中框那点轮廓。
+
+**配置分两份，都不在题库里、不碰 `data/sessions/` 作答数据**：
+
+| 文件 | 作用 | 进 git |
+|---|---|---|
+| `static/theme.json` | 出厂默认：预设色板 / 最小对比度 `contrast` / 默认染色强度 `strength` | 是（共享模板，可手改） |
+| `data/theme-user.json` | 你实际选的配色（`base` / `accent` / `bg` / `text` / `strength`）+ 版本号 `rev` | 否（`data/` 已被 `.gitignore` 排除） |
+
+**跨浏览器 / 端口 / 访问地址同步**：用户配色由服务端经 `/api/theme`（GET 读 / POST 写）持久化到
+`data/theme-user.json`。页面用的是相对路径 `/api/theme`，所以无论从 `127.0.0.1`、`localhost` 还是
+局域网 IP 访问，无论哪个端口、换哪个浏览器，读写的都是**同一份文件**：
+
+- 启动即 GET 服务端配置并覆盖本地显示；
+- 每次改动防抖（350ms）POST 推送，服务端做字段校验与原子写；
+- 定时（3s）与切回页面时轮询，按 `rev` 跟随其他浏览器 / 标签页的改动（本地有未推送改动时本地优先）；
+- `localStorage` 只留 `exam-ui:palette` / `exam-ui:theme` 两个键（与作答缓存 `exam:<sid>` 隔离），
+  降级为「首帧防闪 + 服务端不可用时的离线缓存」，**不再是权威源**。
 
 调色盘分三块，每块都有取色器 + hex 输入 + 「应用」+ `↺` 清除：
 
@@ -101,11 +117,13 @@ export_result(session_id)           # 导出 xlsx
   用处不大所以缩成小按钮，紧挨「清除自定义」「完成」并排。
 - **明暗统一由 `theme.js` 管理**：`app.js` 只剩「配色」按钮，独立的明暗按钮与 `toggleTheme` 已移除；
   `data-theme` 由本模块设置并监听，离线也能用。
-- **配置文件**：`static/theme.json`（独立文件，不进题库、不碰 `data/sessions/`）含
-  `defaultAccent` / `contrast` / `strength` / `presets`，可手改后刷新生效；读取失败时用 `theme.js`
-  内置的同款兜底。静态资源走 `/static/` 路由，新增文件直接丢进 `static/` 即可，无需改后端。
+- **配置文件**：两份都不进题库、不碰 `data/sessions/`。`static/theme.json`（进 git，出厂默认）含
+  `defaultAccent` / `contrast` / `strength` / `presets`，可手改后刷新生效，读取失败时用 `theme.js`
+  内置兜底；`data/theme-user.json`（不进 git）由 `/api/theme` 自动维护，删掉即回到出厂默认。
+  静态资源走 `/static/` 路由，新增文件直接丢进 `static/` 即可，无需改后端。
 
-主题色逻辑全在 `static/theme.js`（对外 `window.KaoWoTheme`），作答、判分、保存、题库读取逻辑均未改动。
+主题色逻辑全在 `static/theme.js`（对外 `window.KaoWoTheme`，另含 `syncNow()` / `getState()`），
+服务端读写在 `server.py` 的 `/api/theme` 与 `_theme_read` / `_theme_write`。作答、判分、保存、题库读取逻辑均未改动。
 
 ## 判分规则
 
@@ -132,13 +150,14 @@ exam-mcp/                ← 本地目录名；开源仓库名 KaoWo
 ├─ static/exam.html     页面外壳（引入 KaTeX 与 theme.js）
 ├─ static/style.css     样式（明暗 + 主题色变量）
 ├─ static/app.js        答题逻辑（改交互从这里下手）
-├─ static/theme.json    主题配色配置：默认色 / 预设色板 / 最小对比度 / 染色强度（可手改）
-├─ static/theme.js      主题色计算 + 调色盘（独立模块，不碰作答逻辑）
+├─ static/theme.json    出厂默认配色：预设色板 / 最小对比度 / 染色强度（进 git，可手改）
+├─ static/theme.js      主题色计算 + 调色盘 + 服务端同步（独立模块，不碰作答逻辑）
 ├─ static/katex/        本地 KaTeX：css / js / auto-render / fonts（离线，勿删）
 ├─ banks/*.xlsx|json    题库；导入生成同名 .json
 ├─ banks/_session_*.json 开考时抽题快照（可随时删，勿当题库）
-└─ data/sessions/*.json 每场作答与结果
-└─ data/result_*.xlsx   导出的成绩表
+├─ data/sessions/*.json 每场作答与结果
+├─ data/result_*.xlsx   导出的成绩表
+└─ data/theme-user.json 用户配色（服务端持久化，跨浏览器/端口共享，不进 git）
 ```
 
 ## 环境与排障
@@ -154,6 +173,7 @@ cd E:/Claw/Learn/exam-mcp
 - **改了代码不生效**：MCP 服务是会话启动时拉起的常驻进程，改完要重启会话（或 `/mcp` 重连）。
 - **页面打不开**：服务随会话存活，会话结束端口就没了；`data/sessions/` 里的记录还在，下次开新会话时用同一端口能继续访问旧会话（`ensure_http` 会优先复用记录的端口）。
 - **端口被占**：会自动退回随机端口，但已经打开的旧标签页仍指向旧端口，需要换新链接。
+- **换浏览器 / 换端口配色没跟上**：配色存在服务端，页面加载即拉取、每 3 秒轮询；切到别的窗口再切回会立即同步。手动删掉 `data/theme-user.json` 后所有端回到出厂默认。
 - **手机打不开（同一热点/局域网）**：先看 `netstat -ano | findstr <端口>` 是否显示 `0.0.0.0:<端口>`；若只有 `127.0.0.1:<端口>`，说明服务只绑了回环地址（旧版本行为），用 `start_exam` 返回的 `lan_urls` 里的 `http://<局域网IP>:<端口>/exam/<id>` 访问。仍不通再查 Windows 防火墙是否放行该 python.exe 的入站。
 - **不要往 stdout 打印**：stdio 协议走 stdout，任何 `print` 都会破坏握手；调试写文件或 stderr。
 
@@ -169,7 +189,8 @@ cd E:/Claw/Learn/exam-mcp
 | 想改什么 | 改哪里 |
 |---|---|
 | 明暗配色、间距 | `static/style.css` 顶部 CSS 变量 |
-| 主题色板 / 最小对比度 / 染色强度 | `static/theme.json`；三槽计算、调色盘、明暗切换都在 `static/theme.js` |
+| 主题色板 / 最小对比度 / 默认染色强度 | `static/theme.json`；三槽计算、调色盘、明暗切换与跨端同步都在 `static/theme.js` |
+| 用户配色存哪 / 读写接口 | `server.py` 的 `THEME_FILE`（默认 `data/theme-user.json`）与 `/api/theme`（GET/POST） |
 | 按钮、键盘、跳题逻辑 | `static/app.js` 的 `renderQuestion` / `onPanelClick` / `toggleUnknown` |
 | 判分规则、部分分 | `server.py` 的 `grade_item` |
 | 新增题型 | `server.py` 的 `TYPE_LABEL`、`grade_item`、`_guess_type`；`app.js` 的 `renderQuestion` |
