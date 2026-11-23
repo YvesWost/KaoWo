@@ -513,40 +513,6 @@ _server_lock = threading.Lock()
 BIND_HOST = os.environ.get("EXAM_BIND", "0.0.0.0")
 
 
-def _lan_ips() -> list[str]:
-    """本机可用的非回环 IPv4，供手机访问。检测失败时返回空列表。"""
-    ips: list[str] = []
-    try:
-        for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
-            if not ip.startswith("127.") and ip not in ips:
-                ips.append(ip)
-    except OSError:
-        pass
-    try:  # 默认路由出口地址，优先排在前面
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            s.connect(("223.5.5.5", 80))
-            ip = s.getsockname()[0]
-            if ip and not ip.startswith("127."):
-                ips = [ip] + [x for x in ips if x != ip]
-        finally:
-            s.close()
-    except OSError:
-        pass
-    # 去掉 169.254 链路本地；192.168 家用/热点网段排前面，其余置后
-    ips = [ip for ip in ips if not ip.startswith("169.254.")]
-    ips.sort(key=lambda ip: 0 if ip.startswith("192.168.") else 1)
-    return ips
-
-
-def _lan_urls(sid: str) -> list[str]:
-    """手机可用的完整地址（局域网 IP）。"""
-    if BIND_HOST not in ("0.0.0.0", "::", ""):
-        return []
-    return [f"http://{ip}:{_port}/exam/{sid}" for ip in _lan_ips()]
-
-
-
 class Handler(BaseHTTPRequestHandler):
     server_version = "exam-mcp"
 
@@ -695,13 +661,23 @@ def session_payload(sess: dict) -> dict:
     }
 
 
-def ensure_http(port: int = 0) -> str:
+def ensure_http(port: int = 1230) -> str:
     global _httpd, _port
     with _server_lock:
         if _httpd is None:
+            # Windows 下 ThreadingHTTPServer 默认 allow_reuse_address=True，
+            # 端口被占仍能 bind 成功，except 兜底失效，故先显式探测占用。
+            if port:
+                probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                probe.settimeout(0.2)
+                try:
+                    if probe.connect_ex(("127.0.0.1", port)) == 0:
+                        port = 0  # 已被监听，退回随机端口
+                finally:
+                    probe.close()
             try:
                 _httpd = ThreadingHTTPServer((BIND_HOST, port or 0), Handler)
-            except OSError:  # 旧端口被占用时退回随机端口
+            except OSError:  # 端口被占用时退回随机端口
                 _httpd = ThreadingHTTPServer((BIND_HOST, 0), Handler)
             _httpd.daemon_threads = True
             _port = int(_httpd.server_address[1])
@@ -890,7 +866,6 @@ def start_exam(
     return _dump({
         "session_id": sid,
         "url": url,
-        "lan_urls": _lan_urls(sid),
         "title": sess["title"],
         "questions": len(questions),
         "total_score": sum(q["score"] for q in questions),
@@ -916,12 +891,11 @@ def wait_for_submit(session_id: str, timeout_seconds: int = 900) -> str:
     _auto_submit_if_due(sess)
     if sess["status"] == "submitted":
         return summary_text(sess["result"])
-    base = ensure_http(int(sess.get("port") or 0))
+    base = ensure_http()
     return _dump({
         "status": "running",
         "session_id": session_id,
         "url": f"{base}/exam/{session_id}",
-        "lan_urls": _lan_urls(session_id),
         "remaining_seconds": max(0, int(sess["deadline"] - _now())) if sess.get("minutes") else None,
         "answered": len([v for v in sess["answers"].values() if v.get("picked") or v.get("text") or v.get("unknown")]),
         "note": "用户还没交卷，可以稍后再调 wait_for_submit 或 get_result。",
@@ -937,9 +911,9 @@ def get_result(session_id: str, detail: bool = True) -> str:
         return str(exc)
     _auto_submit_if_due(sess)
     if sess["status"] != "submitted":
-        base = ensure_http(int(sess.get("port") or 0))
+        base = ensure_http()
         return _dump({"status": "running", "url": f"{base}/exam/{session_id}",
-                      "lan_urls": _lan_urls(session_id), "note": "还没交卷"})
+                      "note": "还没交卷"})
     result = sess["result"]
     if detail:
         return _dump(result)

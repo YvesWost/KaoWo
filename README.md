@@ -171,10 +171,10 @@ cd E:/Claw/Learn/exam-mcp
 
 - **`/mcp` 显示 Failed to reconnect**：确认 `.mcp.json` 里 `command` 指向的 `.venv/Scripts/python.exe` 存在、`args` 指向的 `server.py` 存在；手动跑 `.venv/Scripts/python.exe server.py` 应该什么都不输出并挂住（stdio 服务，正常）。
 - **改了代码不生效**：MCP 服务是会话启动时拉起的常驻进程，改完要重启会话（或 `/mcp` 重连）。
-- **页面打不开**：服务随会话存活，会话结束端口就没了；`data/sessions/` 里的记录还在，下次开新会话时用同一端口能继续访问旧会话（`ensure_http` 会优先复用记录的端口）。
-- **端口被占**：会自动退回随机端口，但已经打开的旧标签页仍指向旧端口，需要换新链接。
+- **页面打不开**：服务随会话存活，会话结束端口就没了；`data/sessions/` 里的记录还在，下次开新会话时仍用固定端口，可继续访问旧会话。
+- **端口固定为 1230**：`ensure_http` 默认绑 1230（绑定前用 `connect_ex` 探测，已被占用则退回随机端口）。因为 Windows 下 `ThreadingHTTPServer` 默认 `allow_reuse_address=True`，端口被占仍能 bind 成功，单靠 `except OSError` 兜底无效，故加了显式探测。若 1230 被占而退化，旧标签页仍指向 1230，需按新返回的 url 访问。要改默认端口就改 `server.py` 的 `ensure_http(port=1230)`。
 - **换浏览器 / 换端口配色没跟上**：配色存在服务端，页面加载即拉取、每 3 秒轮询；切到别的窗口再切回会立即同步。手动删掉 `data/theme-user.json` 后所有端回到出厂默认。
-- **手机打不开（同一热点/局域网）**：先看 `netstat -ano | findstr <端口>` 是否显示 `0.0.0.0:<端口>`；若只有 `127.0.0.1:<端口>`，说明服务只绑了回环地址（旧版本行为），用 `start_exam` 返回的 `lan_urls` 里的 `http://<局域网IP>:<端口>/exam/<id>` 访问。仍不通再查 Windows 防火墙是否放行该 python.exe 的入站。
+- **手机打不开（同一热点/局域网）**：服务绑 `0.0.0.0`，用你自己的局域网 IP 拼 `http://<你的IP>:1230/exam/<id>` 即可（`start_exam` 不再返回 `lan_urls`，需自行提供 IP）。仍不通再查 Windows 防火墙是否放行该 python.exe 的入站。
 - **不要往 stdout 打印**：stdio 协议走 stdout，任何 `print` 都会破坏握手；调试写文件或 stderr。
 
 ## 已知限制
@@ -195,7 +195,7 @@ cd E:/Claw/Learn/exam-mcp
 | 判分规则、部分分 | `server.py` 的 `grade_item` |
 | 新增题型 | `server.py` 的 `TYPE_LABEL`、`grade_item`、`_guess_type`；`app.js` 的 `renderQuestion` |
 | 导出列 | `server.py` 的 `EXPORT_HEAD` 与 `export_xlsx` |
-| 端口、绑定地址 | `server.py` 的 `ensure_http` 与 `BIND_HOST`（默认 `0.0.0.0`，允许手机等局域网设备访问；设环境变量 `EXAM_BIND=127.0.0.1` 可恢复仅本机） |
+| 端口、绑定地址 | `server.py` 的 `ensure_http`（默认端口 1230，被占退化随机）与 `BIND_HOST`（默认 `0.0.0.0`，允许手机等局域网设备访问；设环境变量 `EXAM_BIND=127.0.0.1` 可恢复仅本机） |
 | 公式定界符 / 渲染行为 | `static/app.js` 的 `MATH_DELIMS`、`renderMath` |
 | 静态资源 MIME / 放行目录 | `server.py` 的 `STATIC_TYPES`、`_route_get` 的 `/static/` 分支 |
 
