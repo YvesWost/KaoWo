@@ -23,6 +23,49 @@ export_result(session_id)           # 导出 xlsx
 
 `start_exam` 参数：`minutes=0` 不限时（默认）；`>0` 到点自动交卷。`limit` 抽题数量，`order="random"` 打乱。
 
+## 独立常驻服务（serve.py）
+
+MCP 服务的寿命跟着 AI 客户端走，客户端一关就没人监听。`serve.py` 用同一套代码提供纯 HTTP 守护进程，不依赖 MCP，
+也不继承 harness 的进程组，客户端关了照常收作答、落盘、到点交卷。
+
+```bash
+.venv/Scripts/python.exe serve.py --start    # 后台启动，默认 1230，被占退化随机端口
+.venv/Scripts/python.exe serve.py --status   # pid / 实际端口 / 健康检查
+.venv/Scripts/python.exe serve.py --stop     # 停止
+.venv/Scripts/python.exe serve.py --run      # 前台调试，Ctrl+C 退出
+```
+
+也可以双击 `serve-start.bat` / `serve-stop.bat`（纯 ASCII，不会乱码）。
+
+启动后题库完全由网址决定，不需要 MCP 开考：
+
+```
+http://127.0.0.1:1230/                                 首页：题库表、最近会话、开考表单
+http://127.0.0.1:1230/take?bank=生理学-第09章_选择题全量   直接开考，302 跳到 /exam/<sid>
+http://127.0.0.1:1230/take?bank=生理学-第09章_选择题全量&minutes=45&limit=50&order=random
+http://127.0.0.1:1230/take?bank=...&fresh=1            强制新开一场
+```
+
+| 参数 | 说明 |
+|---|---|
+| `bank` | 题库 id 或文件名，首页和 `/api/banks` 能查全量清单 |
+| `minutes` | 限时分钟，0 或不写即不限时 |
+| `limit` | 抽题数量，0 即全部 |
+| `order` | `original` 原顺序 / `random` 打乱 |
+| `fresh` | `1` 强制新开；不写则同一题库续上还没交卷的那一场 |
+| `format` | `json` 返回 `session_id` 与 `url`，方便脚本批量开考 |
+
+行为要点：
+
+- 作答走原来的 `/api/session/<sid>/save`，页面防抖 700ms 推送，服务端原子写 `data/sessions/<sid>.json`，进程重启不丢。
+- HTML 实际端口写在 `data/serve.json`（`pid` / `port` / `lan` / `started_at`），1230 被占时会退化，按这里的端口访问；日志在 `data/serve.log`。
+- 守护线程每 10 秒检查一次限时会话，到点自动交卷，不需要浏览器开着。
+- 只预载和自动交卷 `origin=serve` 的会话；历史会话按需加载，避免常驻内存随会话数膨胀。
+- 首页列表按文件 mtime 现读现扔，显示最近 20 场。
+- 会话能否打开取决于 `banks/_session_<sid>.json` 快照还在不在，快照被删的旧会话会在首页标注「题库快照已删，打不开」，点不进去。
+- 改了 `serve.py` 要 `--stop` 再 `--start`，否则跑的还是旧代码。
+- 和 MCP 实例可以共存，但别让两个进程同时答同一场；`data/` 目录两边共用。
+
 ## 题库表格格式
 
 第一行表头，列顺序随意，按名字匹配。**题干**和**标准答案**必需。
@@ -147,6 +190,9 @@ export_result(session_id)           # 导出 xlsx
 ```
 exam-mcp/                ← 本地目录名；开源仓库名 KaoWo
 ├─ server.py            MCP 工具 + HTTP 服务 + 判分 + Excel 读写
+├─ serve.py             独立常驻 HTTP 守护进程（不依赖 MCP，可后台运行）
+├─ serve-start.bat      双击后台启动（纯 ASCII）
+├─ serve-stop.bat       双击停止并打印状态
 ├─ static/exam.html     页面外壳（引入 KaTeX 与 theme.js）
 ├─ static/style.css     样式（明暗 + 主题色变量）
 ├─ static/app.js        答题逻辑（改交互从这里下手）
@@ -157,6 +203,8 @@ exam-mcp/                ← 本地目录名；开源仓库名 KaoWo
 ├─ banks/_session_*.json 开考时抽题快照（可随时删，勿当题库）
 ├─ data/sessions/*.json 每场作答与结果
 ├─ data/result_*.xlsx   导出的成绩表
+├─ data/serve.json      常驻服务的 pid / 实际端口 / 局域网地址（自动维护）
+├─ data/serve.log       常驻服务日志
 └─ data/theme-user.json 用户配色（服务端持久化，跨浏览器/端口共享，不进 git）
 ```
 
